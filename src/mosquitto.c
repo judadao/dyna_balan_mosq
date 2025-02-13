@@ -54,6 +54,7 @@ Contributors:
 #include "memory_mosq.h"
 #include "misc_mosq.h"
 #include "util_mosq.h"
+#include "scan_other_brokers.h"
 
 struct mosquitto_db db;
 
@@ -473,7 +474,7 @@ int main(int argc, char *argv[])
 	}
 #endif
 
-
+//設置隨機數seed生成
 #ifdef WIN32
 	GetSystemTime(&st);
 	srand(st.wSecond + st.wMilliseconds);
@@ -491,12 +492,13 @@ int main(int argc, char *argv[])
 	}
 #endif
 
+	//clear mosquitto 資料庫，db是一組struct用來記錄各種資訊
 	memset(&db, 0, sizeof(struct mosquitto_db));
 	db.now_s = mosquitto_time();
 	db.now_real_s = time(NULL);
-
+	//初始化net 的參數 ex. socket參數設定
 	net__broker_init();
-
+	//argv 輸入的的命令 初始化config
 	config__init(&config);
 	rc = config__parse_args(&config, argc, argv);
 	if(rc != MOSQ_ERR_SUCCESS) return rc;
@@ -506,15 +508,17 @@ int main(int argc, char *argv[])
 	 * This requires the user to ensure that all certificates, log locations,
 	 * etc. are accessible my the `mosquitto` or other unprivileged user.
 	 */
+	//確保broker 不會以root執行
 	rc = drop_privileges(&config);
 	if(rc != MOSQ_ERR_SUCCESS) return rc;
-
+	//會將broker 放到背景執行
 	if(config.daemon){
 		mosquitto__daemonise();
 	}
-
+	//創建pid
 	if(pid__write()) return 1;
 
+	//初始化log
 	rc = db__open(&config);
 	if(rc != MOSQ_ERR_SUCCESS){
 		log__printf(NULL, MOSQ_LOG_ERR, "Error: Couldn't open database.");
@@ -533,7 +537,7 @@ int main(int argc, char *argv[])
 	}else{
 		log__printf(NULL, MOSQ_LOG_INFO, "Using default config.");
 	}
-
+	//初始化安全module#看不懂
 	rc = mosquitto_security_module_init();
 	if(rc) return rc;
 	rc = mosquitto_security_init(false);
@@ -541,6 +545,7 @@ int main(int argc, char *argv[])
 
 	/* After loading persisted clients and ACLs, try to associate them,
 	 * so persisted subscriptions can start storing messages */
+	// 初始化ACL#看不懂
 	HASH_ITER(hh_id, db.contexts_by_id, ctxt, ctxt_tmp){
 		if(ctxt && !ctxt->clean_start && ctxt->username){
 			rc = acl__find_acls(ctxt);
@@ -560,9 +565,13 @@ int main(int argc, char *argv[])
 	rc = mux__init(listensock, listensock_count);
 	if(rc) return rc;
 
+	//設置信號處理#看不懂
+
 	signal__setup();
 
 #ifdef WITH_BRIDGE
+	//啟動橋接功能
+	scan_other_brokers_thread();
 	bridge__start_all();
 #endif
 
@@ -570,11 +579,13 @@ int main(int argc, char *argv[])
 #ifdef WITH_SYSTEMD
 	sd_notify(0, "READY=1");
 #endif
-
+	//進入broker loop 循環 等待client端請求
 	run = 1;
 	rc = mosquitto_main_loop(listensock, listensock_count);
 
 	log__printf(NULL, MOSQ_LOG_INFO, "mosquitto version %s terminating", VERSION);
+
+	//以下為釋放資源
 
 	/* FIXME - this isn't quite right, all wills with will delay zero should be
 	 * sent now, but those with positive will delay should be persisted and
