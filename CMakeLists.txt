@@ -24,6 +24,14 @@ if(APPLE)
 endif(APPLE)
 
 include(GNUInstallDirs)
+# 设置输出目录
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/build/bin)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/build/lib)
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/build/lib)
+
+# 设置安装路径
+set(CMAKE_INSTALL_PREFIX "/usr/local")
+
 
 option(WITH_BUNDLED_DEPS "Build with bundled dependencies?" ON)
 option(WITH_TLS

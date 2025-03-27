@@ -1,7 +1,6 @@
 include_directories(${mosquitto_SOURCE_DIR} ${mosquitto_SOURCE_DIR}/src
 		${mosquitto_SOURCE_DIR}/include ${mosquitto_SOURCE_DIR}/lib
 		${OPENSSL_INCLUDE_DIR} ${STDBOOL_H_PATH} ${STDINT_H_PATH})
-
 set (MOSQ_SRCS
 	../lib/alias_mosq.c ../lib/alias_mosq.h
 	bridge.c bridge_topic.c
@@ -70,7 +69,8 @@ set (MOSQ_SRCS
 	../lib/utf8_mosq.c
 	websockets.c
 	will_delay.c
-	../lib/will_mosq.c ../lib/will_mosq.h)
+	../lib/will_mosq.c ../lib/will_mosq.h
+	conf_rest.c ../lib/conf_rest.h)
 
 
 if (WITH_BUNDLED_DEPS)
@@ -204,7 +204,10 @@ if (WITH_WEBSOCKETS)
 	endif (STATIC_WEBSOCKETS)
 endif (WITH_WEBSOCKETS)
 
+
 add_executable(mosquitto ${MOSQ_SRCS})
+target_link_libraries(mosquitto microhttpd)
+
 target_link_libraries(mosquitto ${MOSQ_LIBS})
 if (WIN32)
 	set_target_properties(mosquitto PROPERTIES ENABLE_EXPORTS 1)

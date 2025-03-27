@@ -1,0 +1,14 @@
+{
+    "files.associations": {
+        "microhttpd.h": "c",
+        "cstddef": "cpp",
+        "limits": "cpp",
+        "cstdlib": "c",
+        "mosquitto_broker_internal.h": "c",
+        "typeinfo": "c",
+        "will_mosq.h": "c",
+        "time_mosq.h": "c",
+        "util_mosq.h": "c",
+        "mosquitto_internal.h": "c"
+    }
+}

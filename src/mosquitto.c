@@ -55,6 +55,9 @@ Contributors:
 #include "misc_mosq.h"
 #include "util_mosq.h"
 
+#include <microhttpd.h>
+#include <conf_rest.h>
+
 struct mosquitto_db db;
 
 static struct mosquitto__listener_sock *listensock = NULL;
@@ -444,7 +447,8 @@ static int pid__write(void)
 }
 
 
-int main(int argc, char *argv[])
+
+int mqtt_server_start(int argc, char *argv[])
 {
 	struct mosquitto__config config;
 #ifdef WITH_BRIDGE
@@ -496,11 +500,16 @@ int main(int argc, char *argv[])
 	db.now_real_s = time(NULL);
 
 	net__broker_init();
+	// printf("\r\n db.config->bridge_count 1:%d\r\n", db.config->bridge_count);
 
 	config__init(&config);
 	rc = config__parse_args(&config, argc, argv);
+	// printf("\r\n db.config->bridge_count 2:%d\r\n", config.bridge_count);
+	// db.config_file = "/home/judd/mypro/mqtt_dybro/dyna_balan_mosq/mosquitto.conf";
+	// config__read(&config, false);
 	if(rc != MOSQ_ERR_SUCCESS) return rc;
 	db.config = &config;
+	// printf("\r\n db.config->bridge_count 3:%d\r\n", db.config->bridge_count);
 
 	/* Drop privileges permanently immediately after the config is loaded.
 	 * This requires the user to ensure that all certificates, log locations,
@@ -533,11 +542,14 @@ int main(int argc, char *argv[])
 	}else{
 		log__printf(NULL, MOSQ_LOG_INFO, "Using default config.");
 	}
+	// printf("\r\n db.config->bridge_count 4:%d\r\n", db.config->bridge_count);
 
 	rc = mosquitto_security_module_init();
 	if(rc) return rc;
 	rc = mosquitto_security_init(false);
 	if(rc) return rc;
+
+	// printf("\r\n db.config->bridge_count 5:%d\r\n", db.config->bridge_count);
 
 	/* After loading persisted clients and ACLs, try to associate them,
 	 * so persisted subscriptions can start storing messages */
@@ -556,17 +568,22 @@ int main(int argc, char *argv[])
 #endif
 
 	if(listeners__start()) return 1;
+	// printf("\r\n db.config->bridge_count 6:%d\r\n", db.config->bridge_count);
 
 	rc = mux__init(listensock, listensock_count);
 	if(rc) return rc;
 
 	signal__setup();
-
+	// printf("\r\n db.config->bridge_count 7:%d\r\n", db.config->bridge_count);
+	
 #ifdef WITH_BRIDGE
 	bridge__start_all();
 #endif
 
+	
+
 	log__printf(NULL, MOSQ_LOG_INFO, "mosquitto version %s running", VERSION);
+	// start_http_server();
 #ifdef WITH_SYSTEMD
 	sd_notify(0, "READY=1");
 #endif
@@ -658,3 +675,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	return rc;
 }
 #endif
+
+
+
+int main(int argc, char *argv[]){
+	mqtt_server_start(argc, argv);
+}
+

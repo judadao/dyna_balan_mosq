@@ -60,27 +60,35 @@ static void bridge__backoff_reset(struct mosquitto *context);
 void bridge__start_all(void)
 {
 	int i;
+	printf("\r\n db.bridge_count before bridge__start_all:%d\r\n", db.bridge_count);
+	printf("\r\n db.config->bridge_count before bridge__start_all:%d\r\n", db.config->bridge_count);
 
 	for(i=0; i<db.config->bridge_count; i++){
+		printf("\r\n after bridge__new  !!\r\n");
 		if(bridge__new(&(db.config->bridges[i])) > 0){
 			log__printf(NULL, MOSQ_LOG_WARNING, "Warning: Unable to connect to bridge %s.",
 					db.config->bridges[i].name);
 		}
 	}
-}
 
+	printf("\r\n db.bridge_count after bridge__start_all:%d\r\n", db.bridge_count);
+}
 
 int bridge__new(struct mosquitto__bridge *bridge)
 {
+	printf("\r\n in bridge__new 1 !!\r\n");
 	struct mosquitto *new_context = NULL;
 	struct mosquitto **bridges;
 	char *local_id;
-
+	
 	assert(bridge);
-
+	printf("\r\n in bridge__new 2!!\r\n");
+	
 	local_id = mosquitto__strdup(bridge->local_clientid);
+	printf("\r\n in bridge__new 2.5!!\r\n");
 
 	HASH_FIND(hh_id, db.contexts_by_id, local_id, strlen(local_id), new_context);
+	
 	if(new_context){
 		/* (possible from persistent db) */
 		mosquitto__free(local_id);
@@ -94,6 +102,8 @@ int bridge__new(struct mosquitto__bridge *bridge)
 		new_context->id = local_id;
 		context__add_to_by_id(new_context);
 	}
+
+	
 	new_context->bridge = bridge;
 	new_context->is_bridge = true;
 
@@ -135,6 +145,8 @@ int bridge__new(struct mosquitto__bridge *bridge)
 		}
 	}
 
+	
+
 	bridges = mosquitto__realloc(db.bridges, (size_t)(db.bridge_count+1)*sizeof(struct mosquitto *));
 	if(bridges){
 		db.bridges = bridges;
@@ -143,7 +155,7 @@ int bridge__new(struct mosquitto__bridge *bridge)
 	}else{
 		return MOSQ_ERR_NOMEM;
 	}
-
+	printf("\r\n in bridge__new 3!!\r\n");
 #if defined(__GLIBC__) && defined(WITH_ADNS)
 	new_context->bridge->restart_t = 1; /* force quick restart of bridge */
 	return bridge__connect_step1(new_context);

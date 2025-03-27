@@ -159,6 +159,36 @@ static void queue_plugin_msgs(void)
 	}
 }
 
+int bridge__dynamic_add(const char *name, const char *address, int port, const char *topic)
+{
+    struct mosquitto__bridge *new_bridges;
+    int index = db.config->bridge_count;
+
+    new_bridges = mosquitto__realloc(db.config->bridges, sizeof(struct mosquitto__bridge) * (index + 1));
+    if(!new_bridges) return MOSQ_ERR_NOMEM;
+
+    db.config->bridges = new_bridges;
+    struct mosquitto__bridge *br = &db.config->bridges[index];
+    memset(br, 0, sizeof(struct mosquitto__bridge));
+
+    db.config->bridge_count++;
+
+    br->name = mosquitto__strdup(name);
+    br->remote_clientid = mosquitto__strdup(name);
+    br->local_clientid = mosquitto__strdup(name);
+    br->addresses = mosquitto__calloc(1, sizeof(struct bridge_address));
+    br->addresses[0].address = mosquitto__strdup(address);
+    br->addresses[0].port = port;
+    br->address_count = 1;
+    br->clean_start = true;
+    br->clean_start_local = true;
+    br->keepalive = 60;
+    br->try_private = true;
+
+    bridge__add_topic(br, topic, bd_both, 1, NULL, NULL);
+
+    return bridge__new(br);
+}
 
 int mosquitto_main_loop(struct mosquitto__listener_sock *listensock, int listensock_count)
 {
@@ -180,12 +210,10 @@ int mosquitto_main_loop(struct mosquitto__listener_sock *listensock, int listens
 
 	db.now_s = mosquitto_time();
 	db.now_real_s = time(NULL);
-
 #ifdef WITH_BRIDGE
 	rc = bridge__register_local_connections();
 	if(rc) return rc;
 #endif
-
 	while(run){
 		queue_plugin_msgs();
 		context__free_disused();
@@ -198,6 +226,7 @@ int mosquitto_main_loop(struct mosquitto__listener_sock *listensock, int listens
 		keepalive__check();
 
 #ifdef WITH_BRIDGE
+		bridge__dynamic_add("test", "192.168.1.12", 1883, "sensors/#");
 		bridge_check();
 #endif
 
@@ -230,13 +259,20 @@ int mosquitto_main_loop(struct mosquitto__listener_sock *listensock, int listens
 #endif
 		if(flag_reload){
 			log__printf(NULL, MOSQ_LOG_INFO, "Reloading config.");
+			// printf("\r\n db.bridge_count before:%d\r\n", db.config->bridge_count);
 			config__read(db.config, true);
+			// printf("\r\n db.bridge_count after:%d\r\n", db.config->bridge_count);
 			listeners__reload_all_certificates();
+			
 			mosquitto_security_cleanup(true);
 			mosquitto_security_init(true);
 			mosquitto_security_apply();
 			log__close(db.config);
 			log__init(db.config);
+			
+			// config__check(db.config);
+			// bridge__start_all();
+
 			flag_reload = false;
 		}
 		if(flag_tree_print){

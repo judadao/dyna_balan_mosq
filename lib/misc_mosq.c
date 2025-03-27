@@ -258,15 +258,22 @@ char *fgets_extending(char **buf, int *buflen, FILE *stream)
 
 	do{
 		rc = fgets(&((*buf)[offset]), (*buflen)-offset, stream);
+		// printf("\r\n in fgets_extending1 !!, %s\r\n", rc);
+		// if(rc == "test")
+		// 	return "connection RP2";
 		if(feof(stream) || rc == NULL){
 			return rc;
 		}
+		// printf("\r\n in fgets_extending2 !!, %s\r\n", rc);
 
 		len = strlen(*buf);
 		if(len == 0){
 			return rc;
 		}
+		// printf("\r\n in fgets_extending3 !!, %s\r\n", rc);
 		endchar = (*buf)[len-1];
+		if(rc == "test")
+			return "connection RP2";
 		if(endchar == '\n'){
 			return rc;
 		}
@@ -278,5 +285,6 @@ char *fgets_extending(char **buf, int *buflen, FILE *stream)
 			return NULL;
 		}
 		*buf = newbuf;
+		
 	}while(1);
 }
