@@ -158,36 +158,71 @@ static void queue_plugin_msgs(void)
 		mosquitto__free(msg);
 	}
 }
-
-int bridge__dynamic_add(const char *name, const char *address, int port, const char *topic)
+struct bridge_topic_config {
+    const char *topic;
+    const char *direction;       // "in", "out", "both"
+    int qos;
+    const char *local_prefix;    // nullable
+    const char *remote_prefix;   // nullable
+};
+int bridge__dynamic_add_topics(const char *name, const char *address, int port,
+	const struct bridge_topic_config *topics, int topic_count)
 {
-    struct mosquitto__bridge *new_bridges;
-    int index = db.config->bridge_count;
+	struct mosquitto__bridge *new_bridges;
+	int index = db.config->bridge_count;
+	int i, rc;
 
-    new_bridges = mosquitto__realloc(db.config->bridges, sizeof(struct mosquitto__bridge) * (index + 1));
-    if(!new_bridges) return MOSQ_ERR_NOMEM;
+	new_bridges = mosquitto__realloc(db.config->bridges, sizeof(struct mosquitto__bridge) * (index + 1));
+	if(!new_bridges) return MOSQ_ERR_NOMEM;
 
-    db.config->bridges = new_bridges;
-    struct mosquitto__bridge *br = &db.config->bridges[index];
-    memset(br, 0, sizeof(struct mosquitto__bridge));
+	db.config->bridges = new_bridges;
+	struct mosquitto__bridge *br = &db.config->bridges[index];
+	memset(br, 0, sizeof(struct mosquitto__bridge));
+	db.config->bridge_count++;
 
-    db.config->bridge_count++;
+	// 基本 bridge 設定
+	br->name = mosquitto__strdup(name);
+	br->remote_clientid = mosquitto__strdup(name);
+	br->local_clientid = mosquitto__strdup(name);
+	br->addresses = mosquitto__calloc(1, sizeof(struct bridge_address));
+	if (!br->addresses) return MOSQ_ERR_NOMEM;
+	br->addresses[0].address = mosquitto__strdup(address);
+	br->addresses[0].port = port;
+	br->address_count = 1;
+	br->clean_start = true;
+	br->clean_start_local = true;
+	br->keepalive = 60;
+	br->try_private = true;
+	br->notifications = false;
+	br->protocol_version = mosq_p_mqtt311;
 
-    br->name = mosquitto__strdup(name);
-    br->remote_clientid = mosquitto__strdup(name);
-    br->local_clientid = mosquitto__strdup(name);
-    br->addresses = mosquitto__calloc(1, sizeof(struct bridge_address));
-    br->addresses[0].address = mosquitto__strdup(address);
-    br->addresses[0].port = port;
-    br->address_count = 1;
-    br->clean_start = true;
-    br->clean_start_local = true;
-    br->keepalive = 60;
-    br->try_private = true;
+	// 加入 topics
+	for(i = 0; i < topic_count; i++){
+		enum mosquitto__bridge_direction dir;
+		if(strcmp(topics[i].direction, "in") == 0){
+			dir = bd_in;
+		} else if(strcmp(topics[i].direction, "out") == 0){
+			dir = bd_out;
+		} else {
+			dir = bd_both;
+		}
 
-    bridge__add_topic(br, topic, bd_both, 1, NULL, NULL);
+		rc = bridge__add_topic(br, topics[i].topic, dir, (uint8_t)topics[i].qos,
+			topics[i].local_prefix, topics[i].remote_prefix);
+		if(rc != MOSQ_ERR_SUCCESS){
+			log__printf(NULL, MOSQ_LOG_ERR, "[bridge] Failed to add topic: %s (code: %d)", topics[i].topic, rc);
+			return rc;
+		}
 
-    return bridge__new(br);
+		log__printf(NULL, MOSQ_LOG_INFO, "[bridge] Topic added: %s (dir: %s, qos: %d)",
+			topics[i].topic, topics[i].direction, topics[i].qos);
+	}
+
+	log__printf(NULL, MOSQ_LOG_INFO, "[bridge] Created bridge: %s with %d topics", name, br->topic_count);
+
+	// 建立 client context
+	return bridge__new(br);
+
 }
 
 int mosquitto_main_loop(struct mosquitto__listener_sock *listensock, int listensock_count)
@@ -213,10 +248,32 @@ int mosquitto_main_loop(struct mosquitto__listener_sock *listensock, int listens
 #ifdef WITH_BRIDGE
 	rc = bridge__register_local_connections();
 	if(rc) return rc;
+	
+	
 #endif
+	int i = 0;
+	struct bridge_topic_config topics[] = {
+		{ "sensors/#", "in", 1, NULL, NULL }
+		// { "logs/+", "out", 1, NULL, NULL }
+		// { "alerts/+", "both", 0, "local/", "remote/" }
+	};
+	
+
+	bool reload_flag = true;
+	bridge__dynamic_add_topics("B1", "192.168.1.11", 1883, topics, 1);
 	while(run){
 		queue_plugin_msgs();
 		context__free_disused();
+		// if(reload_flag == true){
+		// 	i++;
+		// 	printf("\r\nflag reload: %d\r\n", reload_flag);
+		// 	if(i==100){
+		// 		bridge__dynamic_add("test", "192.168.1.11", 1883, "sensors/#");
+		// 		reload_flag = false;
+		// 	}
+		// }
+		// printf("\r\nflag reload: %d\r\n", flag_reload);
+		
 #ifdef WITH_SYS_TREE
 		if(db.config->sys_interval > 0){
 			sys_tree__update(db.config->sys_interval, start_time);
@@ -226,7 +283,7 @@ int mosquitto_main_loop(struct mosquitto__listener_sock *listensock, int listens
 		keepalive__check();
 
 #ifdef WITH_BRIDGE
-		bridge__dynamic_add("test", "192.168.1.12", 1883, "sensors/#");
+		// bridge__dynamic_add("test", "192.168.1.12", 1883, "sensors/#");
 		bridge_check();
 #endif
 

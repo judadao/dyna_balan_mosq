@@ -76,16 +76,16 @@ void bridge__start_all(void)
 
 int bridge__new(struct mosquitto__bridge *bridge)
 {
-	printf("\r\n in bridge__new 1 !!\r\n");
+
 	struct mosquitto *new_context = NULL;
 	struct mosquitto **bridges;
 	char *local_id;
 	
 	assert(bridge);
-	printf("\r\n in bridge__new 2!!\r\n");
+
 	
 	local_id = mosquitto__strdup(bridge->local_clientid);
-	printf("\r\n in bridge__new 2.5!!\r\n");
+
 
 	HASH_FIND(hh_id, db.contexts_by_id, local_id, strlen(local_id), new_context);
 	
